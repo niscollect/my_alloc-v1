@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
+#include <assert.h>
 
 #define META_SIZE sizeof(meta_block)
 
@@ -203,7 +205,7 @@ void* reall_oc(void* ptr, size_t size)
     }
 
     memcpy(new_ptr, ptr, block_ptr->size);
-    free(ptr);
+    freee(ptr);
     
     return new_ptr;
     
