@@ -21,14 +21,15 @@ meta_block* global_base = NULL;
 
 
 // to look for free block
-meta_block* find_free_block(size_t size)
+meta_block* find_free_block(meta_block** last, size_t size)
 {
     meta_block* curr = global_base;
-    meta_block* prev = NULL;
+    // meta_block* prev = NULL;
+    // replace prev with 'last'
 
     while(curr && !(curr->free && curr->size >= size)) //* This is where we'll bring in the fitting check (currently it's first fit)
     {
-        prev = curr;
+        *last = curr;  //? "*last" is the pointer, "last" is the pointer to that pointer
         curr = curr->next;
     }
 
@@ -100,20 +101,22 @@ void* my_alloc(int size)
     {   //* (2): Not the first call
 
         // If it isn't the first time, there are already blocks in the list, and suppose we don't find an empty block when searched for, then we'll have to request a block, but to add it to the Linked List i.e apparently the heap, we'll need to get the end of the linked list. So:
-        // meta_block* last = global_base; //! very design specific choice 
-        //? let's first try to avoid it, it's just complicating things for me
+        
+        //-----------------------------------//
+        // meta_block* last = NULL;          //
+        // meta_block* temp = global_base;   //
+        // while(temp)                       //
+        // {                                 //
+        //     last = temp;                  //
+        //     temp = temp->next;            //
+        // }                                 //
+        // Now "last" points to the last     //
+        //-----------------------------------//
 
-        meta_block* last = NULL;
-        meta_block* temp = global_base;
-        while(temp)
-        {
-            last = temp;
-            temp = temp->next;
-        }
-        // Now "last" points to the last
+        
+        meta_block* last = global_base;
 
-
-        block = find_free_block(size);
+        block = find_free_block(&last, size);
         if(!block)
         {
             //* if we can't find one, we'll request 
