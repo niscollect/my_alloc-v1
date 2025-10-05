@@ -3,11 +3,11 @@
 #include <string.h>
 #include <assert.h>
 
-#define META_SIZE sizeof(meta_block)
 
 #define ALIGNMENT 8 // or 16 in some cases
 #define ALIGN(size) ((size) + (ALIGNMENT - 1)) &~ (ALIGNMENT - 1)
 
+// #define META_SIZE sizeof(meta_block)
 #define META_SIZE ALIGN(sizeof(meta_block))
 
 typedef struct meta_block
