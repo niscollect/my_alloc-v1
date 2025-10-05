@@ -1,6 +1,6 @@
 # my_alloc
 
-A simple memory allocator implementing `malloc()`, `free()`, `calloc()`, and `realloc()` from scratch.
+An alignment-aware custom memory allocator implementing `malloc()`, `free()`, `calloc()`, and `realloc()` from scratch.
 
 ## What is this?
 
