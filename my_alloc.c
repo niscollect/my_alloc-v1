@@ -5,10 +5,15 @@
 
 #define META_SIZE sizeof(meta_block)
 
+#define ALIGNMENT 8 // or 16 in some cases
+#define ALIGN(size) ((size) + (ALIGNMENT - 1)) &~ (ALIGNMENT - 1)
+
+#define META_SIZE ALIGN(sizeof(meta_block))
 
 typedef struct meta_block
 {
-    size_t size;
+    size_t size;         // user-requested size
+    size_t aligned_size; // actual block size allocated
     struct meta_block *next;
     int free;   // mark if it's free or not
     
@@ -25,11 +30,14 @@ meta_block* global_base = NULL;
 // to look for free block
 meta_block* find_free_block(meta_block** last, size_t size)
 {
+
+    size_t aligned_size = ALIGN(size);
+
     meta_block* curr = global_base;
     // meta_block* prev = NULL;
     // replace prev with 'last'
 
-    while(curr && !(curr->free && curr->size >= size)) //* This is where we'll bring in the fitting check (currently it's first fit)
+    while(curr && !(curr->free && curr->aligned_size >= aligned_size)) //* This is where we'll bring in the fitting check (currently it's first fit)
     {
         *last = curr;  //? "*last" is the pointer, "last" is the pointer to that pointer
         curr = curr->next;
@@ -41,12 +49,15 @@ meta_block* find_free_block(meta_block** last, size_t size)
 // to request for free block
 meta_block* request_block(meta_block* last, size_t size)
 {
+
+    size_t aligned_size = ALIGN(size);
+
     meta_block* block = NULL;
     
     block = sbrk(0); // current program break
     
     //* *//
-    void* request = sbrk(size + META_SIZE); // gives the starting part
+    void* request = sbrk(aligned_size + META_SIZE); // gives the starting part
     //* *//
 
     // just for debugging help
@@ -63,6 +74,7 @@ meta_block* request_block(meta_block* last, size_t size)
     }
 
     block->size = size;
+    block->aligned_size = aligned_size;
     block->next = NULL; // marks it as 'the last block'
     block->free = 0;
 
@@ -72,9 +84,12 @@ meta_block* request_block(meta_block* last, size_t size)
 
 void* my_alloc(int size)
 {
+
+    //* align the requested size
+    size_t aligned_size = ALIGN(size);
+
     // Naive way
     // return sbrk(size);
-
 
 
     meta_block* block;
@@ -89,7 +104,7 @@ void* my_alloc(int size)
     //* (1): First call
     if(!global_base)
     {
-        block = request_block(NULL ,size);
+        block = request_block(NULL ,size);  //* we don't pass `aligned_size` here, coz alignment is internal work, we'll look for it in the internal, i.e. when we deal with raw memory, this is user facing API
         
         if(!block)
         {
@@ -118,11 +133,12 @@ void* my_alloc(int size)
         
         meta_block* last = global_base;
 
-        block = find_free_block(&last, size);
+        block = find_free_block(&last, size); //* we don't pass `aligned_size` here, coz alignment is internal work, we'll look for it in the internal, i.e. when we deal with raw memory, this is user facing API
         if(!block)
         {
             //* if we can't find one, we'll request 
             block = request_block(last, size); // give the last also, coz that's where the request block will be fixed
+            //* we don't pass aligned_size here, coz alignment is internal work, we'll look for it in the internal, i.e. when we deal with raw memory, this is user facing API
             if(!block)
             {
                 return NULL;
@@ -139,8 +155,8 @@ void* my_alloc(int size)
     
     // ! Very Imp. line of code
     return (block + 1);
+    //* This will go to the user, and so it must be internally aligned. Yes, it is aligned, by the `META_SIZE` macro
 }
-
 
 
 void freee(void* ptr)
@@ -179,6 +195,9 @@ void* call_oc(size_t nelem, size_t elsize)
 
 void* reall_oc(void* ptr, size_t size)
 {
+
+    size_t aligned_size_request = ALIGN(size);
+
     //*NOTE:  ptr = NULL  ------> realloc behaves as malloc
     if(!ptr)
     {
@@ -190,6 +209,12 @@ void* reall_oc(void* ptr, size_t size)
     if(block_ptr->size >= size)
     {
         // already have enough space
+        return ptr;
+    }
+
+    if(block_ptr->aligned_size >= aligned_size_request)
+    {
+        block_ptr->size = size; // update user-visible size
         return ptr;
     }
 

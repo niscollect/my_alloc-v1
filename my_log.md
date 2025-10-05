@@ -247,7 +247,8 @@ Now, we can see things clearly. We ask the system to give us a `'S+M'` size and 
 So, now look back to the `my_alloc()` function.
 It returns `block` which is a pointer to the space created with sbrk(size+META_SIZE), where block, being a pointer of META_SIZE, when done +1, moves by the size of META_SIZE.
 
-![[Pasted image 20251003225853.png]]
+![alt text](image.png)
+
 
 Thus, `my_alloc()` returns:
 ```C
@@ -405,8 +406,196 @@ void* reall_oc(void* ptr, size_t size)
 ```
 
 <hr>
+
+<hr>
+
+## ALIGNMENT
+
+
+Alignment is what hardware expects.
+And it cannot be ignored. One must abide by it.
+
+Many architectures expect certain data types to start at address divisible by some multiple of 2(4, 16, etc.). For example, it’s common to require 4-byte types to be aligned to 4-byte boundaries and 8-byte types on 8-byte boundaries. If multi-byte primitives are stored on an unreasonable boundary, the performance can be significantly impacted. On some architectures the penalty is even greater - the program will crash.
+
+As malloc does not know how the user will use the allocated memory, the pointer returned to the program needs to be aligned for the worst case, which is architecture-dependent.
+
+So, when we do: `(block+1)`, we intend to move the `block` pointer by `sizeof(meta_block)`, which works only if `sizeof(meta_block)` is divisible by the strictest alignment requirement, so else the pointer that we get for the memory won't be aligned, and so the consequences. 
+
+What we currently have:
+	meta_block  ->   | size_t size (8 bytes) | int free (4 bytes) | meta_block* next (8 bytes) |
+
+	8+4+8 = 20 bytes {Not Aligned}
+
+	Compiler might add a 4 bytes padding, but what if I want to add a `char flag`, later on?
+
+**NOTE** :- Anytime we change `meta_data`, we might misalign user pointer.
+
+###### Now,
+### How do I retrofit alignment into my code?
+
+Whenever we allocate:  `block = request_block(last, size)`
+If someone asks for 50 bytes, and we just pass 50 to sbrk as it is, the returned memory won't be aligned.
+So, always round up requested size to neared multiple
+
+<hr>
+NOTE:
+
+Alignment is essentially about where a memory block "handed to the user" starts and how it's "lined up" in the address space relative to CPU requirements.
+
+- The starting address of a memory block must satisfy a multiple of the alignment requirement.
+	We have `block` (ptr) in the actually heap, pointing to the start of the memory, and then `block+1` (ptr+1) pointing to the payload space which the user will receive to work with.
+	This must be aligned, i.e. `block+1` must be aligned, not necessarily `block`.
+
+	Though it is the way it is, but safest bet is to align wherever `size` is being dealt with "the raw memory", not at user facing API.
+	{We use aligned_size when requesting the sbrk, not when we called the `request_space(NULL, size)`. Why? Coz it is apparently a user facing API, it is not itself dealing with raw memory.} [Being clear with the distinction of Interface and Implementation]
+
+- While the CPU doesn't usually care about the exact end of th block, alignment often forces the block size to be rounded up so the next block also starts on an aligned boundary.
+<hr>
+
+***Rounding up for Alignment***:
+
+First define what the alignment requirement is:
+```C
+define ALIGNMENT 8 // 16 for some systems
+```
+
+Now, rounding up of a size:
+
+```
+((size) + (ALIGNMENT - 1)) &~ (ALIGNMENT - 1)
+```
+
+So, define a MACRO for it
+```C
+define ALIGN ((size) + (ALIGNMENT - 1)) &~ (ALIGNMENT - 1)
+```
+It rounds up to the next multiple of `ALIGNMENT`
+
+Start aligning everywhere you deal with `size`.
+
+1) Inside `my_Alloc` and `call_oc`, use `aligned_size` instead of `size`:
+```C
+size_t aligned_size = ALIGN(size);
+```
+	& use `aligned_size` wherever you do these (& only for these):
+	- call sbrk
+	- decide a free block is big enough  *****
+
+2) When we do: `return (block+1)`:
+	block: is a `meta_block*`
+	(block + 1) : points immediately after the metadata so we want that to be aligned
+
+	There are 2 ways to handle it
+	1) Add padding manually: 
+		After `block+1` compute offset to next multiple of ALIGNMENT and return that.
+	
+	2) Force `meta_block` to be multiple of ALIGNMENT
+```C
+	define META_SIZE ALIGN(sizeof(meta_block))	
+```
+		Then everywhere we add `META_SIZE` the resulting user pointer is aligned
+
+3) Update `sbrk` requests:
+```C
+void* request = sbrk(aligned_size + META_SIZE);
+```
+
+4) Update free block:
+```C
+if(curr->free && curr->size >= aligned_size)
+```
+
+<hr>
+We saw a clear distinction between the usage of `aligned_size` with interface and implementation. 
+However, when we reach to the function `request_block()`, we encounter something triggering.
+After requesting the new block (with aligned size), we do:
+```C
+    block->size = size;
+    block->next = NULL; // marks it as 'the last block'
+    block->free = 0;
+```
+For example: user asked `size = 13B` allocator aligned it to `aligned_size = 16B` and thus what the request gets in return is a `16B` block. But according to the above excerpt, we still mark the block's meta data with it's size being `13B` and not `16B`. That is not good. Why? Suppose this block is freed after some time, and a new request by the user is of `size = 15B`, again the allocator rounds it up to `aligned_size = 16B`. Now when we `find_free_block`, though we have a 16B block, but since it's marked as 13B we won't ever get that and a new block will be created, despite we had a big enough block.
+
+So, there needs to be some work around:
+Two options:
+1) Store aligned size in metadata too
+```C
+typedef struct meta_block {
+    size_t size;         // user-requested size
+    size_t aligned_size; // actual block size allocated
+    struct meta_block *next;
+    int free;
+} meta_block;
+```
+
+2) Recompute aligned size on-the-fly
+```C
+if (block->free && ALIGN(block->size) >= ALIGN(request_size))
+```
+	Involves recomputation of alignment every time; performace-overhead.
+
+We opt option-1, as it's clear, safer, better and more realistic.
+So, now again going back to the `find_free_block()`
+where we compared `curr->size` with `aligned_size`, now we'll compare `curr->alignd_size` with `aligned_size`
+```C
+while(curr && !(curr->free && curr->aligned_size >= aligned_size))
+```
+
+Coming to *`reall_oc()`*:
+There's a subtlety in here, considering reallocation and alignment. 
+Example:
+User had a previous request of 13B, but internally got 16B, now he want the same to be expanded to 15B, again most probably he'll need 16B, but if the allocator doesn't know that the same block is usable to 16B, it would request a new block.
+So, it's better to check for same block reuse in `reall_oc()` considering the `aligned_size_request`:
+
+```C
+void* reall_oc(void* ptr, size_t size)
+{
+    size_t aligned_size_request = ALIGN(size);
+
+    //*NOTE:  ptr = NULL  ------> realloc behaves as malloc
+    if(!ptr)
+    {
+        return my_alloc(size);
+    }
+    
+    meta_block* block_ptr = (meta_block*)ptr - 1;
+
+    if(block_ptr->size >= size)
+    {
+        // already have enough space
+        return ptr;
+    }
+
+    if(block_ptr->aligned_size >= aligned_size_request)
+    {
+        block_ptr->size = size; // update user-visible size
+        return ptr;
+    }
+    
+    // need to really realloc
+    //* Malloc new space and free old space
+    //* then just copy old data to the new space
+    void* new_ptr;
+    new_ptr = my_alloc(size);
+    if(!new_ptr)
+    {
+        return NULL;
+    }
+    
+    memcpy(new_ptr, ptr, block_ptr->size);
+    
+    freee(ptr);
+    return new_ptr;
+
+}
+```
+
 <hr>
 
 <hr>
-<hr>
 
+
+Next steps:
+1) splitting/coalescing
+2) add segregated-free-list implementation
+3) Think of concurrency/thread-awareness
