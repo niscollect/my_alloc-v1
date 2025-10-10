@@ -5,10 +5,11 @@
 
 
 #define ALIGNMENT 8 // or 16 in some cases
-#define ALIGN(size) ((size) + (ALIGNMENT - 1)) &~ (ALIGNMENT - 1)
+#define ALIGN(size) ( ((size) + (ALIGNMENT - 1)) &~ (ALIGNMENT - 1) )
 
-// #define META_SIZE sizeof(meta_block)
-#define META_SIZE ALIGN(sizeof(meta_block))
+
+#define MIN_PAYLOAD 8  // often set to ALIGNMENT, so it can save atleast some user data
+
 
 typedef struct meta_block
 {
@@ -18,6 +19,11 @@ typedef struct meta_block
     int free;   // mark if it's free or not
     
 }meta_block;
+
+
+
+// #define META_SIZE sizeof(meta_block)
+#define META_SIZE ALIGN(sizeof(meta_block))
 
 
 // ------------------------------------------------------------------------
@@ -46,6 +52,7 @@ meta_block* find_free_block(meta_block** last, size_t size)
     return curr;
 
 }
+
 // to request for free block
 meta_block* request_block(meta_block* last, size_t size)
 {
@@ -80,6 +87,42 @@ meta_block* request_block(meta_block* last, size_t size)
 
     return block;
 }
+
+
+void split_block(meta_block* ptr, size_t requested_size)
+{
+    size_t aligned_requested_size = ALIGN(requested_size);
+
+    meta_block* new_block = (meta_block*)( (char*)(ptr) + META_SIZE + aligned_requested_size );
+
+    new_block->aligned_size = (ptr)->aligned_size - aligned_requested_size - META_SIZE;
+    new_block->free = 1;
+
+
+    new_block->next = (ptr)->next;
+    (ptr)->next = new_block;
+    (ptr)->aligned_size = aligned_requested_size;
+    (ptr)->size = requested_size;
+    (ptr)->free = 0;
+
+}
+
+
+void coalesce_forward(meta_block* block_ptr)
+{
+    meta_block* next_block = block_ptr->next;
+
+    // check if next exists and is free
+    if (next_block && next_block->free)
+    {
+        // merge sizes (+META_SIZE for the header between them)
+        block_ptr->aligned_size += next_block->aligned_size + META_SIZE;
+
+        // link skipping next block
+        block_ptr->next = next_block->next;
+    }
+}
+
 
 
 void* my_alloc(int size)
@@ -149,6 +192,10 @@ void* my_alloc(int size)
             //* found a free block
             block->free = 0;
         }
+        if(block && block->aligned_size >= aligned_size + META_SIZE + MIN_PAYLOAD) // check if it's splitable
+        {
+            split_block(block, size);  // split
+        }
 
         
     }
@@ -171,6 +218,10 @@ void freee(void* ptr)
     assert(block_ptr->free == 0);
 
     block_ptr->free = 1;
+
+    //* coalescing (forward)
+    coalesce_forward(block_ptr);
+
 }
 
 void* call_oc(size_t nelem, size_t elsize)

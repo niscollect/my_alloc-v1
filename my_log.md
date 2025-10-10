@@ -1,8 +1,8 @@
 
 
-###### STEP_1 : understand void*
+##### STEP_1 : understand void*
 	 Just a generic pointer
-###### STEP_2 : understand sbrk
+##### STEP_2 : understand sbrk
 	`sbrk` -> lets us manipulate the heap
 
 	## NOTE: `sbrk` returns pointer to the first unallocated byte
@@ -25,7 +25,7 @@ There's so much to implementing a custom allocator. We'll tackle everything on t
 
 <hr>
 
-## The very naive approach
+### The very naive approach
 
 Idea: - Just sbrk() when needed
 
@@ -247,8 +247,7 @@ Now, we can see things clearly. We ask the system to give us a `'S+M'` size and 
 So, now look back to the `my_alloc()` function.
 It returns `block` which is a pointer to the space created with sbrk(size+META_SIZE), where block, being a pointer of META_SIZE, when done +1, moves by the size of META_SIZE.
 
-![alt text](image.png)
-
+![alt text](<Pasted image 20251003225853.png>)
 
 Thus, `my_alloc()` returns:
 ```C
@@ -594,8 +593,111 @@ void* reall_oc(void* ptr, size_t size)
 
 <hr>
 
+## Splitting and Coalescing
+<hr>
+
+## Splitting
+
+![alt text](<shapes at 25-10-10 17.11.16.png>)
+
+![alt text](<shapes at 25-10-10 17.19.31.png>)
+
+User calls `freee(ptr3)` {ptr3 is the ptr to the 64B block} :
+```C
+meta_block* block = (meta_block*)ptr3 - 1;
+block->free = 1;
+```
+
+now, user calls `my_alloc(7)`
+& by chance, we get the 64B payload block at first.
+Now instead of giving the 64B completely just for 7 bytes, split it.
+
+So, to divide:
+
+![alt text](<shapes at 25-10-10 17.27.08.png>)
+
+1) Change the meta_data of block
+2) Create a new meta_data for soon to be created block (of 56B).
+
+<hr>
+
+```C
+new_block = (meta_block*)((char*)(ptr) + aligned_requested_size + META_SIZE)
+```
+
+<hr>
+#### NOTE:
+###### Pointer Arithmetic
+
+When we do:
+`ptr+1` we shift the address by `sizeof(*ptr)`
+`ptr + n` means we shift by  `n * sizeof(*ptr)`
+
+if `ptr` points to an integer the address shifts by `n * sizeof(int)`
+Similarly,
+ here `ptr` is of  of type `meta_data`
+ so `ptr + req.size`  will move by `meta_data` times `req.size`
+ but we don't want to do so,
+ we want to move exactly `req.size` bytes,
+ i.e. we go byte-by-byte.
+ So, we use 
+  ```C
+      ( char * )
+  ```
+ coz char is guaranteed to be of 1B
+
+<hr>
+
+```C
+    new_block->aligned_size = (ptr)->aligned_size - aligned_requested_size - META_SIZE;
+    new_block->free = 1;
+
+	// adjust the next pointers
+
+    new_block->next = (ptr)->next;
+
+    (ptr)->next = new_block;
+
+    (ptr)->aligned_size = aligned_requested_size;
+
+    (ptr)->size = requested_size;
+
+    (ptr)->free = 0;
+```
+<hr>
+
+## Coalescing
+
+![alt text](<shapes at 25-10-10 17.54.26 1.png>)
+
+If `ptr2` was used, but just now user called `freee(ptr2)` .
+Till now, we just used to mark `(ptr2 - 1) -> free = 1` , where {block = ptr2-1}
+
+Now, when freeing, just quickly check if the forward block is free or not. If it is, just coalesce:
+```C
+next_block = block->next;
+
+block->next = next_block->next;
+block->aligned_size = block->aligned_size + next_block->aligned_size + META_SIZE
+```
+
+{ This was Forward Coalescing }
+
+<hr>
+
+<hr>
+
+## Implementing Segregated Free Lists
+
+.....to be done
+
+<hr>
+
+<hr>
 
 Next steps:
-1) splitting/coalescing
+1) splitting/coalescing [DONE]
 2) add segregated-free-list implementation
 3) Think of concurrency/thread-awareness
+
+
