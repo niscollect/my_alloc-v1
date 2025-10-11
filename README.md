@@ -53,8 +53,6 @@ void* reall_oc(void* ptr, size_t size);
 
 ## TODO
 
-- [ ] Block splitting for better memory utilization
-- [ ] Coalescing adjacent free blocks
 - [ ] Segregated free lists
 - [ ] Thread safety (mutexes)
 - [ ] Better fit strategies (best-fit, next-fit)
