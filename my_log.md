@@ -507,7 +507,7 @@ if(curr->free && curr->size >= aligned_size)
 <hr>
 We saw a clear distinction between the usage of `aligned_size` with interface and implementation. 
 However, when we reach to the function `request_block()`, we encounter something triggering.
-After requesting the new block (with aligned size), we do:
+After requesting the new block (with aligned size), we do
 ```C
     block->size = size;
     block->next = NULL; // marks it as 'the last block'
