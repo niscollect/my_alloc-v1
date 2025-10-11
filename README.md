@@ -47,9 +47,8 @@ void* reall_oc(void* ptr, size_t size);
 ## Limitations
 
 - Not thread-safe, currently
-- No block splitting or coalescing
 - Memory is never returned to the OS
-- First-fit can cause fragmentation
+- First-fit can cause fragmentation(which is sort of inevitable with the current configurations)
 
 ## TODO
 
