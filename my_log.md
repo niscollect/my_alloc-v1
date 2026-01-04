@@ -689,15 +689,18 @@ block->aligned_size = block->aligned_size + next_block->aligned_size + META_SIZE
 
 ## Implementing Segregated Free Lists
 
-.....to be done
+[DONE]. Unfortunately, I couldn't log the journey for it.
+
+<hr>
+<hr>
+<br>
+## Thread-aware
+[DONE] Made the allocator thread aware.<br>
+Unfortunately, I couldn't log this journey due to some technical issues.
+
 
 <hr>
 
 <hr>
-
-Next steps:
-1) splitting/coalescing [DONE]
-2) add segregated-free-list implementation
-3) Think of concurrency/thread-awareness
 
 
