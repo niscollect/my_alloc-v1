@@ -49,12 +49,8 @@ void* reall_oc(void* ptr, size_t size);
 - Not thread-safe, currently
 - Memory is never returned to the OS
 - First-fit can cause fragmentation(which is sort of inevitable with the current configurations)
-
-## TODO
-
-- [ ] Segregated free lists
-- [ ] Thread safety (mutexes)
-- [ ] Better fit strategies (best-fit, next-fit)
+- Implemented Segregated free lists
+- Made the allocator Thread safety (mutexes)
 
 
 A complete guide to the development can be found in `my_log.md` in this repo.
