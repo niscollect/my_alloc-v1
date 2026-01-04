@@ -694,8 +694,10 @@ block->aligned_size = block->aligned_size + next_block->aligned_size + META_SIZE
 <hr>
 <hr>
 <br>
-## Thread-aware
-[DONE] Made the allocator thread aware.<br>
+<h3><br>Thread-aware <b> </h3>
+<br>
+[DONE] Made the allocator thread aware.
+<br>
 Unfortunately, I couldn't log this journey due to some technical issues.
 
 
