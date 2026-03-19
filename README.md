@@ -46,8 +46,7 @@ void* reall_oc(void* ptr, size_t size);
 
 ## Limitations
 
-- Not thread-safe, currently
-- Memory is never returned to the OS
+- Memory is currently not returned to the OS
 - First-fit can cause fragmentation(which is sort of inevitable with the current configurations)
 - Implemented Segregated free lists
 - Made the allocator Thread safety (mutexes)
